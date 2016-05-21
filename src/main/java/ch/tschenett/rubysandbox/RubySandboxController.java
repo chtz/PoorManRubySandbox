@@ -26,9 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * samples:
  * <pre>
- * curl --header "Content-Type:application/octet-stream" --data-binary @../rubyRunContainer/sample.txt localhost:8080/74af008f-ea31-4896-a42f-7b82f581d3ce
- * curl --header "Content-Type:application/octet-stream" --data-binary @testdata/scripts/sample.rb localhost:8080/
- * 
  * curl --header "Content-Type:text/plain" --data-binary @testdata/scripts/sample.rb http://www.sandbox.p.iraten.ch/
  * curl --header "Content-Type:text/plain" --data-binary @src/main/java/ch/tschenett/rubysandbox/RubySandboxApplication.java http://www.sandbox.p.iraten.ch/8df5e8ab-6cee-4339-ab2b-d3b7e4e51f7d 
  * </pre>
