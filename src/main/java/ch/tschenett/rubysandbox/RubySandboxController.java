@@ -9,6 +9,10 @@ import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javax.annotation.PostConstruct;
 
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -36,11 +40,21 @@ public class RubySandboxController {
 	@Value("${ruby.timeout}")
     private String rubyTimeout;
 	
+	@Value("${ruby.readThreads}")
+    private int rubyReadThreads;
+	
 	@Value("${ruby.workingDirectory}")
     private String rubyWorkingDirectory;
 	
 	@Value("${ruby.scriptDirectory}")
     private String rubyScriptDirectory;
+	
+	private ExecutorService rubyReadExecutorService;
+	
+	@PostConstruct
+	public void init() {
+		rubyReadExecutorService = Executors.newFixedThreadPool(rubyReadThreads);
+	}
 	
 	@RequestMapping(value = "/", method = RequestMethod.POST)
 	public void createScript(Reader req, Writer res) throws IOException {
@@ -68,7 +82,7 @@ public class RubySandboxController {
 			
 			final Process p = pb.start();
 			
-			Thread reqThread = new Thread(new Runnable() {
+			rubyReadExecutorService.execute(new Runnable() {
 				@Override
 				public void run() {
 					try {
@@ -84,8 +98,6 @@ public class RubySandboxController {
 					}
 				}
 			});
-			
-			reqThread.start();
 			
 			try {
 				IOUtils.copy(p.getInputStream(), res);
