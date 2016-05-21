@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <pre>
  * curl --header "Content-Type:application/octet-stream" --data-binary @../rubyRunContainer/sample.txt localhost:8080/74af008f-ea31-4896-a42f-7b82f581d3ce
  * curl --header "Content-Type:application/octet-stream" --data-binary @testdata/scripts/sample.rb localhost:8080/
+ * 
+ * curl --header "Content-Type:application/octet-stream" --data-binary @testdata/scripts/sample.rb http://www.sandbox.p.iraten.ch/
+ * curl --header "Content-Type:text/plain" --data-binary @src/main/java/ch/tschenett/rubysandbox/RubySandboxApplication.java http://www.sandbox.p.iraten.ch/37e0a2ae-21c8-4424-b4cd-9e50c64f40c6 
  * </pre>
  */
 @RestController
