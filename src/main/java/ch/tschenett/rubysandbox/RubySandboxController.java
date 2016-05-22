@@ -78,6 +78,7 @@ public class RubySandboxController {
 	public void executeScript(InputStream req, OutputStream res, @PathVariable String scriptId) throws IOException {    
 		try {
 			ProcessBuilder pb = new ProcessBuilder(rubyCommand, scriptFile(scriptId).getCanonicalPath(), rubyTimeout);
+			pb.redirectErrorStream(true);
 			pb.directory(new File(rubyWorkingDirectory));
 			
 			final Process p = pb.start();
