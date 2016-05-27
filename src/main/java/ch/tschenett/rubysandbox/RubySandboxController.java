@@ -58,6 +58,11 @@ public class RubySandboxController {
 		rubyReadExecutorService = Executors.newFixedThreadPool(rubyReadThreads);
 	}
 	
+	@RequestMapping(value = "/", method = RequestMethod.GET)
+	public void serveIndex(Writer res) throws IOException {
+		res.write("nothing to see here");
+	}
+	
 	@RequestMapping(value = "/", method = RequestMethod.POST)
 	public void createScript(Reader req, Writer res) throws IOException {
 		String scriptId = UUID.randomUUID().toString();
