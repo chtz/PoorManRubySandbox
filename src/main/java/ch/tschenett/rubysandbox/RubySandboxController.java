@@ -1,18 +1,20 @@
 package ch.tschenett.rubysandbox;
 
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
+import java.util.Enumeration;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.annotation.PostConstruct;
+import javax.servlet.http.HttpServletRequest;
 
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -74,25 +76,44 @@ public class RubySandboxController {
 		log.info("Script created: {}", scriptId);
 	}
 	
+	@RequestMapping(value = "/{scriptId}", method = RequestMethod.GET)
+	public void executeGetScript(HttpServletRequest request,  OutputStream res, @PathVariable String scriptId) throws IOException {
+		executePostScript(request, res, scriptId);
+	}
+	
 	@RequestMapping(value = "/{scriptId}", method = RequestMethod.POST)
-	public void executeScript(InputStream req, OutputStream res, @PathVariable String scriptId) throws IOException {    
+	public void executePostScript(HttpServletRequest request, OutputStream res, @PathVariable String scriptId) throws IOException {    
 		try {
 			ProcessBuilder pb = new ProcessBuilder(rubyCommand, scriptFile(scriptId).getCanonicalPath(), rubyTimeout);
+			
 			pb.redirectErrorStream(true);
 			pb.directory(new File(rubyWorkingDirectory));
 			
 			final Process p = pb.start();
 			
+			final DataOutputStream out = new DataOutputStream(p.getOutputStream());
+			for (Enumeration<String> e = request.getParameterNames(); e.hasMoreElements(); ) {
+				String key = e.nextElement();
+				String value = request.getParameter(key);
+				
+				//pb.environment().put(key, value);
+				out.writeBytes(key + "=" + value + "\n");
+				
+				log.info("Env {} = {}", key, value);
+			}
+			
+			out.writeBytes("~~~<666~END~OF~SCRIPT~999>~~~\n");
+			
 			rubyReadExecutorService.execute(new Runnable() {
 				@Override
 				public void run() {
 					try {
-						IOUtils.copy(req, p.getOutputStream());
+						IOUtils.copy(request.getInputStream(), out);
 					} catch (IOException e) {
 						log.warn("Failed to read request", e);
 					} finally {
 						try {
-							p.getOutputStream().close();
+							out.close();
 						} catch (IOException e) {
 							//ignore
 						}
