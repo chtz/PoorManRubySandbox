@@ -30,9 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * sample:
- * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://localhost:8080/wf`
- * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary "" http://localhost:8080/wf/$WF_ID`
- * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary "" http://localhost:8080/wf/$WF_ID/$IN_ID`
+ * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://www.sandbox.p.iraten.ch/wf`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary "" http://www.sandbox.p.iraten.ch/wf/$WF_ID`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary "" http://www.sandbox.p.iraten.ch/wf/$WF_ID/$IN_ID`
  */
 @RestController
 public class WorkflowController {
