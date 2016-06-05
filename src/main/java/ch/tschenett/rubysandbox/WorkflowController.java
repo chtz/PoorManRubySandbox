@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.UUID;
@@ -23,6 +24,11 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
+ * sample:
+ * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://localhost:8080/wf`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"foo":"bar"}' http://localhost:8080/wf/$WF_ID`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"bar":"foo"}' http://localhost:8080/wf/$WF_ID/$IN_ID`
+ * 
  * sample:
  * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://www.sandbox.p.iraten.ch/wf`
  * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary "" http://www.sandbox.p.iraten.ch/wf/$WF_ID`
@@ -76,7 +82,7 @@ public class WorkflowController {
 		try {
 			Process p = process(wfCommand, wfId);
 			
-			copyToProcessClosing(p, req);
+			copyToProcess(p, req, true);
 			
 			String stateId = UUID.randomUUID().toString();
 			
@@ -91,16 +97,49 @@ public class WorkflowController {
 			log.warn("Failed to create Workflow Instance", e);
 		}
 	}
+	
+	@RequestMapping(value = "/wf/{wfId}/{stateId}", method = RequestMethod.POST)
+	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {    
+		try {
+			Process p = process(wfSignalCommand, wfId);
+			
+			copyToProcess(p, new BufferedInputStream(new FileInputStream(existingStateFile(stateId))), req.available() == 0);
+			
+			if (req.available() > 0) {
+				p.getOutputStream().write("\n~~~<666~END~OF~SCRIPT~999>~~~\n".getBytes());
+				
+				copyToProcess(p, req, true);
+			}
+			
+			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(existingStateFile(stateId))));
+			
+			p.waitFor();
+			
+			res.write(stateId);
+			
+			log.info("Workflow Instance signalled: {}. Workflow Definition: {}", stateId, wfId);
+		} catch (Exception e) {
+			log.warn("Failed to signal Workflow Instance", e);
+		}
+	}
+	
+	private Process process(String command, String wfId) throws IOException, FileNotFoundException {
+		ProcessBuilder pb = new ProcessBuilder(command, existingWfFile(wfId).getCanonicalPath());
+		pb.redirectErrorStream(true);
+		pb.directory(new File(wfWorkingDirectory));
+		
+		return pb.start();
+	}
 
-	private void copyToProcessClosing(final Process p, InputStream in) {
-		BufferedOutputStream out = new BufferedOutputStream(p.getOutputStream());
+	private void copyToProcess(final Process p, InputStream in, boolean closeOut) {
+		OutputStream out = /*new BufferedOutputStream(*/p.getOutputStream()/*)*/; //FIXME
 		try {
 			IOUtils.copy(in, out);
 		} catch (IOException e) {
 			log.warn("Failed to write to process", e);
 		} finally {
 			try {
-				out.close();
+				if (closeOut) out.close();
 			} catch (IOException e) {
 				//ignore
 			}
@@ -132,33 +171,6 @@ public class WorkflowController {
 		}
 	}
 	
-	@RequestMapping(value = "/wf/{wfId}/{stateId}", method = RequestMethod.POST)
-	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {    
-		try {
-			Process p = process(wfSignalCommand, wfId);
-			
-			copyToProcessClosing(p, new BufferedInputStream(new FileInputStream(existingStateFile(stateId))));
-			
-			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(existingStateFile(stateId))));
-			
-			p.waitFor();
-			
-			res.write(stateId);
-			
-			log.info("Workflow Instance signalled: {}. Workflow Definition: {}", stateId, wfId);
-		} catch (Exception e) {
-			log.warn("Failed to signal Workflow Instance", e);
-		}
-	}
-
-	private Process process(String command, String wfId) throws IOException, FileNotFoundException {
-		ProcessBuilder pb = new ProcessBuilder(command, existingWfFile(wfId).getCanonicalPath());
-		pb.redirectErrorStream(true);
-		pb.directory(new File(wfWorkingDirectory));
-		
-		return pb.start();
-	}
-
 	private File existingWfFile(String wfId) throws IOException, FileNotFoundException {
 		return existingFile(wfScriptDirectory, wfId, ".rb");
 	}
