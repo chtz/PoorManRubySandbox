@@ -26,8 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * sample:
  * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://localhost:8080/wf`
- * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"foo":"bar"}' http://localhost:8080/wf/$WF_ID`
- * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"bar":"foo"}' http://localhost:8080/wf/$WF_ID/$IN_ID`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"sum":123}' http://localhost:8080/wf/$WF_ID`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"result":100}' http://localhost:8080/wf/$WF_ID/$IN_ID/c6821184-d394-495e-9efe-af3cb3c12c76`
+ * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"result":200}' http://localhost:8080/wf/$WF_ID/$IN_ID/b4f76287-dc44-46ea-804a-4ca6cd75fc89`
  * 
  * sample:
  * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://www.sandbox.p.iraten.ch/wf`
@@ -100,6 +101,11 @@ public class WorkflowController {
 	
 	@RequestMapping(value = "/wf/{wfId}/{stateId}", method = RequestMethod.POST)
 	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {    
+		signalProcessInstance(req, res, wfId, stateId, null);
+	}
+	
+	@RequestMapping(value = "/wf/{wfId}/{stateId}/{tokenId}", method = RequestMethod.POST)
+	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId, @PathVariable String tokenId) throws IOException {    
 		try {
 			Process p = process(wfSignalCommand, wfId);
 			
@@ -108,7 +114,12 @@ public class WorkflowController {
 			if (req.available() > 0) {
 				p.getOutputStream().write("\n~~~<666~END~OF~SCRIPT~999>~~~\n".getBytes());
 				
-				copyToProcess(p, req, true);
+				copyToProcess(p, req, tokenId == null);
+				
+				if (tokenId != null) {
+					p.getOutputStream().write(("\n~~~<666~END~OF~SCRIPT~999>~~~\n" + tokenId).getBytes());
+					p.getOutputStream().close();
+				}
 			}
 			
 			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(existingStateFile(stateId))));
