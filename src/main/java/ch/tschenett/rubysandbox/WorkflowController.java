@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * sample:
  * WF_ID=`curl -s --header "Content-Type:text/plain" --data-binary @test3_wf.rb http://localhost:8080/wf`
  * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"sum":123}' http://localhost:8080/wf/$WF_ID`
+ * curl -s http://localhost:8080/wf/$WF_ID/$IN_ID | jq -r .token.childs[0].uuid
  * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"result":100}' http://localhost:8080/wf/$WF_ID/$IN_ID/c6821184-d394-495e-9efe-af3cb3c12c76`
  * IN_ID=`curl -s --header "Content-Type:text/plain" --data-binary '{"result":200}' http://localhost:8080/wf/$WF_ID/$IN_ID/b4f76287-dc44-46ea-804a-4ca6cd75fc89`
  * 
@@ -96,6 +97,16 @@ public class WorkflowController {
 			log.info("Workflow Instance created: {}. Workflow Definition: {}", stateId, wfId);
 		} catch (Exception e) {
 			log.warn("Failed to create Workflow Instance", e);
+		}
+	}
+
+	@RequestMapping(value = "/wf/{wfId}/{stateId}", method = RequestMethod.GET)
+	public void lookupProcessInstance(OutputStream res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {
+		InputStream stateIn = new BufferedInputStream(new FileInputStream(existingStateFile(stateId)));
+		try {
+			IOUtils.copy(stateIn, res);
+		} finally {
+			stateIn.close();
 		}
 	}
 	
