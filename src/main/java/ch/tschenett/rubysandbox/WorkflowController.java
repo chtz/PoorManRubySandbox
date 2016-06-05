@@ -2,22 +2,16 @@ package ch.tschenett.rubysandbox;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
+import java.io.InputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import javax.annotation.PostConstruct;
-import javax.servlet.http.HttpServletRequest;
 
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -56,145 +50,100 @@ public class WorkflowController {
 	@Value("${wf.stateDirectory}")
     private String wfStateDirectory;
 	
-	private ExecutorService wfReadExecutorService;
-	
-	@PostConstruct
-	public void init() {
-		wfReadExecutorService = Executors.newFixedThreadPool(wfReadThreads);
-	}
-	
 	@RequestMapping(value = "/wf", method = RequestMethod.POST)
-	public void createScript(Reader req, Writer res) throws IOException {
-		String scriptId = UUID.randomUUID().toString();
-		
-		File scriptDir = new File(wfScriptDirectory);
-		File scriptFile = new File(scriptDir, scriptId + ".rb");
-		FileWriter out = new FileWriter(scriptFile);
+	public void createWorkflowDefinition(Reader req, Writer res) throws IOException {
 		try {
-			IOUtils.copy(req, out);
-		} finally {
-			out.close();
+			String wfId = UUID.randomUUID().toString();
+			
+			FileWriter wfOut = new FileWriter(wfFile(wfId));
+			try {
+				IOUtils.copy(req, wfOut);
+			} finally {
+				wfOut.close();
+			}
+			
+			res.write(wfId);
+			
+			log.info("Workflow Definition created: {}", wfId);
 		}
-		
-		res.write(scriptId);
-		
-		log.info("Wf created: {}", scriptId);
+		catch (Exception e) {
+			log.warn("Failed to create Workflow Definition", e);
+		}
 	}
 	
 	@RequestMapping(value = "/wf/{wfId}", method = RequestMethod.POST)
-	public void executePostScript(HttpServletRequest request, OutputStream res, @PathVariable String wfId) throws IOException {    
+	public void createWorkflowInstance(InputStream req, Writer res, @PathVariable String wfId) throws IOException {    
 		try {
-			ProcessBuilder pb = new ProcessBuilder(wfCommand, wfFile(wfId).getCanonicalPath());
+			Process p = process(wfCommand, wfId);
 			
-			pb.redirectErrorStream(true);
-			pb.directory(new File(wfWorkingDirectory));
-			
-			final Process p = pb.start();
-			
-			final DataOutputStream out = new DataOutputStream(p.getOutputStream());
-			
-			wfReadExecutorService.execute(new Runnable() {
-				@Override
-				public void run() {
-					try {
-						IOUtils.copy(request.getInputStream(), out);
-					} catch (IOException e) {
-						log.warn("Failed to read request", e);
-					} finally {
-						try {
-							out.close();
-						} catch (IOException e) {
-							//ignore
-						}
-					}
-				}
-			});
+			copyToProcessClosing(p, req);
 			
 			String stateId = UUID.randomUUID().toString();
 			
-			File stateDir = new File(wfStateDirectory);
-			File stateFile = new File(stateDir, stateId + ".json");
-			BufferedOutputStream stateOut = new BufferedOutputStream(new FileOutputStream(stateFile));
-			
-			try {
-				IOUtils.copy(p.getInputStream(), stateOut);
-			} catch (IOException e) {
-				log.warn("Failed to write response", e);
-			} finally {
-				try {
-					p.getInputStream().close();
-				} catch (IOException e) {
-					//ignore
-				}
-				try {
-					stateOut.close();
-				} catch (IOException e) {
-					//ignore
-				}
-				
-			}
+			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(stateFile(stateId))));
 			
 			p.waitFor();
 			
-			res.write(stateId.getBytes());
+			res.write(stateId);
 			
-			log.info("Wf processed: {}", wfId);
+			log.info("Workflow Instance created: {}. Workflow Definition: {}", stateId, wfId);
 		} catch (Exception e) {
-			log.warn("Failed to process request", e);
+			log.warn("Failed to create Workflow Instance", e);
+		}
+	}
+
+	private void copyToProcessClosing(final Process p, InputStream in) {
+		BufferedOutputStream out = new BufferedOutputStream(p.getOutputStream());
+		try {
+			IOUtils.copy(in, out);
+		} catch (IOException e) {
+			log.warn("Failed to write to process", e);
+		} finally {
+			try {
+				out.close();
+			} catch (IOException e) {
+				//ignore
+			}
+			try {
+				in.close();
+			} catch (IOException e) {
+				//ignore
+			}
+		}
+	}
+	
+	private void copyFromProcessClosing(Process p, BufferedOutputStream out) {
+		BufferedInputStream in = new BufferedInputStream(p.getInputStream());
+		try {
+			IOUtils.copy(in, out);
+		} catch (IOException e) {
+			log.warn("Failed to read from process", e);
+		} finally {
+			try {
+				out.close();
+			} catch (IOException e) {
+				//ignore
+			}
+			try {
+				in.close();
+			} catch (IOException e) {
+				//ignore
+			}
 		}
 	}
 	
 	@RequestMapping(value = "/wf/{wfId}/{stateId}", method = RequestMethod.POST)
-	public void executePostScript(HttpServletRequest request, OutputStream res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {    
+	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId) throws IOException {    
 		try {
-			ProcessBuilder pb = new ProcessBuilder(wfSignalCommand, wfFile(wfId).getCanonicalPath());
+			Process p = process(wfSignalCommand, wfId);
 			
-			pb.redirectErrorStream(true);
-			pb.directory(new File(wfWorkingDirectory));
+			copyToProcessClosing(p, new BufferedInputStream(new FileInputStream(existingStateFile(stateId))));
 			
-			final Process p = pb.start();
-			
-			final DataOutputStream out = new DataOutputStream(p.getOutputStream());
-			BufferedInputStream stateIn = new BufferedInputStream(new FileInputStream(stateFile(stateId)));
-			try {
-				IOUtils.copy(stateIn, out);
-			} catch (IOException e) {
-				log.warn("Failed to read request", e);
-			} finally {
-				try {
-					out.close();
-				} catch (IOException e) {
-					//ignore
-				}
-				try {
-					stateIn.close();
-				} catch (IOException e) {
-					//ignore
-				}
-			}
-			
-			BufferedOutputStream stateOut = new BufferedOutputStream(new FileOutputStream(stateFile(stateId)));
-			try {
-				IOUtils.copy(p.getInputStream(), stateOut);
-			} catch (IOException e) {
-				log.warn("Failed to write response", e);
-			} finally {
-				try {
-					p.getInputStream().close();
-				} catch (IOException e) {
-					//ignore
-				}
-				try {
-					stateOut.close();
-				} catch (IOException e) {
-					//ignore
-				}
-				
-			}
+			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(existingStateFile(stateId))));
 			
 			p.waitFor();
 			
-			res.write(stateId.getBytes());
+			res.write(stateId);
 			
 			log.info("Wf processed: {}", wfId);
 		} catch (Exception e) {
@@ -202,33 +151,48 @@ public class WorkflowController {
 		}
 	}
 
-	private File wfFile(String scriptId) throws IOException, FileNotFoundException {
-		File scriptDir = new File(wfScriptDirectory);
-		File scriptFile = new File(scriptDir, scriptId + ".rb");
+	private Process process(String command, String wfId) throws IOException, FileNotFoundException {
+		ProcessBuilder pb = new ProcessBuilder(command, existingWfFile(wfId).getCanonicalPath());
+		pb.redirectErrorStream(true);
+		pb.directory(new File(wfWorkingDirectory));
 		
-		if (!scriptFile.getCanonicalPath().startsWith(scriptDir.getCanonicalPath())) {
-			throw new SecurityException();
-		}
-		
-		if (!scriptFile.exists() || !scriptFile.canRead()) {
-			throw new FileNotFoundException();
-		}
-		
-		return scriptFile;
+		return pb.start();
+	}
+
+	private File existingWfFile(String wfId) throws IOException, FileNotFoundException {
+		return existingFile(wfScriptDirectory, wfId, ".rb");
 	}
 	
-	private File stateFile(String scriptId) throws IOException, FileNotFoundException {
-		File scriptDir = new File(wfStateDirectory);
-		File scriptFile = new File(scriptDir, scriptId + ".json");
+	private File wfFile(String wfId) throws IOException, FileNotFoundException {
+		return file(wfScriptDirectory, wfId, ".rb");
+	}
+	
+	private File existingStateFile(String stateId) throws IOException, FileNotFoundException {
+		return existingFile(wfStateDirectory, stateId, ".json");
+	}
+	
+	private File stateFile(String stateId) throws IOException, FileNotFoundException {
+		return file(wfStateDirectory, stateId, ".json");
+	}
+	
+	private File existingFile(String directoryName, String fileName, String fileExt) throws IOException, FileNotFoundException {
+		File file = file(directoryName, fileName, fileExt);
 		
-		if (!scriptFile.getCanonicalPath().startsWith(scriptDir.getCanonicalPath())) {
+		if (!file.exists() || !file.canRead()) {
+			throw new FileNotFoundException(file.getName());
+		}
+		
+		return file;
+	}
+	
+	private File file(String directoryName, String fileName, String fileExt) throws IOException, FileNotFoundException {
+		File dir = new File(directoryName);
+		File file = new File(dir, fileName + fileExt);
+		
+		if (!file.getCanonicalPath().startsWith(dir.getCanonicalPath())) {
 			throw new SecurityException();
 		}
 		
-		if (!scriptFile.exists() || !scriptFile.canRead()) {
-			throw new FileNotFoundException();
-		}
-		
-		return scriptFile;
+		return file;
 	}
 }
