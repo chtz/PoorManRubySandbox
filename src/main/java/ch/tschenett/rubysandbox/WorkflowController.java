@@ -145,9 +145,9 @@ public class WorkflowController {
 			
 			res.write(stateId);
 			
-			log.info("Wf processed: {}", wfId);
+			log.info("Workflow Instance signalled: {}. Workflow Definition: {}", stateId, wfId);
 		} catch (Exception e) {
-			log.warn("Failed to process request", e);
+			log.warn("Failed to signal Workflow Instance", e);
 		}
 	}
 
