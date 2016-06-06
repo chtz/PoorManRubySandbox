@@ -9,7 +9,7 @@
   state_node  :state_a,
               :default_transition => :join,
               :enter_action => lambda { |token|
-                token["command"] = "RANDOM"
+                token["commandx"] = "RANDOM"
               },
               :leave_action => lambda { |token|
                 token["random"] = token["result"]
@@ -19,7 +19,7 @@
   state_node  :state_b,
               :default_transition => :join,
               :enter_action => lambda { |token|
-                token["command"] = "RANDOM"
+                token["commandx"] = "RANDOM"
               },
               :leave_action => lambda { |token|
                 token["random"] = token["result"] * -1
