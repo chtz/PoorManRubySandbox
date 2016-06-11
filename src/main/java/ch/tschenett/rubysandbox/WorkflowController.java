@@ -82,11 +82,11 @@ public class WorkflowController {
 	@RequestMapping(value = "/wf/{wfId}", method = RequestMethod.POST)
 	public void createWorkflowInstance(InputStream req, Writer res, @PathVariable String wfId) throws IOException {    
 		try {
-			Process p = process(wfCommand, wfId);
+			String stateId = UUID.randomUUID().toString();
+			
+			Process p = process(wfCommand, wfId, stateId);
 			
 			copyToProcess(p, req, true);
-			
-			String stateId = UUID.randomUUID().toString();
 			
 			copyFromProcessClosing(p, new BufferedOutputStream(new FileOutputStream(stateFile(stateId))));
 			
@@ -118,7 +118,7 @@ public class WorkflowController {
 	@RequestMapping(value = "/wf/{wfId}/{stateId}/{tokenId}", method = RequestMethod.POST)
 	public void signalProcessInstance(InputStream req, Writer res, @PathVariable String wfId, @PathVariable String stateId, @PathVariable String tokenId) throws IOException {    
 		try {
-			Process p = process(wfSignalCommand, wfId);
+			Process p = process(wfSignalCommand, wfId, stateId);
 			
 			copyToProcess(p, new BufferedInputStream(new FileInputStream(existingStateFile(stateId))), req.available() == 0);
 			
@@ -145,8 +145,8 @@ public class WorkflowController {
 		}
 	}
 	
-	private Process process(String command, String wfId) throws IOException, FileNotFoundException {
-		ProcessBuilder pb = new ProcessBuilder(command, existingWfFile(wfId).getCanonicalPath());
+	private Process process(String command, String wfId, String stateId) throws IOException, FileNotFoundException {
+		ProcessBuilder pb = new ProcessBuilder(command, existingWfFile(wfId).getCanonicalPath(), UUID.fromString(wfId).toString(), UUID.fromString(stateId).toString());
 		pb.redirectErrorStream(true);
 		pb.directory(new File(wfWorkingDirectory));
 		

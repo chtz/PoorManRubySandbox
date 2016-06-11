@@ -27,7 +27,7 @@
               }            
 
   join_node   :join,
-              :default_transition => :end,
+              :default_transition => :wait,
               :enter_action => lambda { |token|
                 unless token.parent["sum"]
                   token.parent["sum"] = token["random"]
@@ -37,6 +37,12 @@
               },
               :leave_action => lambda { |token|
                 #puts "sum: #{token["sum"]}"
+              }
+    
+  state_node  :wait,
+              :default_transition => :end,  
+              :enter_action => lambda { |token|
+                token["command"] = ["sleep", 60]
               }
               
   end_node    :end
